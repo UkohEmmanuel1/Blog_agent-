@@ -155,6 +155,7 @@ This returns platform-specific draft text in the agent run output. It does not c
 | PUT | `/api/v1/social-accounts/{id}/credentials` | Rotate an account access token |
 | GET | `/api/v1/social-posts?status=draft` | List social post drafts and statuses |
 | POST | `/api/v1/social-posts` | Create a social post draft |
+| PATCH | `/api/v1/social-posts/{id}` | Edit a draft social post |
 | POST | `/api/v1/social-posts/{id}/submit-for-review` | Submit a post for approval |
 | POST | `/api/v1/media` | Upload media to private object storage |
 
