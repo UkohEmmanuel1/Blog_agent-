@@ -382,10 +382,10 @@ async fn upload_media(
     let storage = atlas_agents::storage::S3Storage::from_env().await.map_err(internal)?;
     storage.put(&key, bytes.clone(), &request.content_type).await.map_err(internal)?;
     let row = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, Option<i64>)>(
-        "insert into public.media_assets (id,article_id,storage_bucket,storage_path,media_type,mime_type,file_size_bytes,alt_text,uploaded_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id,storage_bucket,storage_path,media_type,mime_type,file_size_bytes"
+        "insert into public.media_assets (id,article_id,storage_bucket,storage_path,media_type,mime_type,file_size_bytes,alt_text,uploaded_by,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id,storage_bucket,storage_path,media_type,mime_type,file_size_bytes"
     ).bind(asset_id).bind(request.article_id).bind(storage.bucket()).bind(&key)
      .bind(media_type).bind(&request.content_type).bind(bytes.len() as i64)
-     .bind(request.alt_text).bind(user.id).fetch_one(&state.db).await.map_err(internal)?;
+     .bind(request.alt_text).bind(user.id).bind(json!({"original_filename":request.filename})).fetch_one(&state.db).await.map_err(internal)?;
     Ok((StatusCode::CREATED, Json(json!({
         "id":row.0,"bucket":row.1,"path":row.2,"media_type":row.3,
         "mime_type":row.4,"file_size_bytes":row.5,"status":"stored"
