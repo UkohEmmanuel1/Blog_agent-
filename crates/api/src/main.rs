@@ -3,11 +3,15 @@ mod routes;
 mod state;
 
 use anyhow::{Context, Result};
+use axum::http::{header::{AUTHORIZATION, CONTENT_TYPE}, HeaderValue, Method};
 use routes::router;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use state::AppState;
 use std::{env, str::FromStr, time::Duration};
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    trace::TraceLayer,
+};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -32,7 +36,19 @@ async fn main() -> Result<()> {
     let auth = auth::AuthVerifier::from_supabase_url(&supabase_url)
         .await
         .context("failed to load Supabase JWT signing keys")?;
-    let app = router(AppState { db: pool, auth }).layer(TraceLayer::new_for_http());
+
+    let allowed_origin = env::var("CORS_ALLOWED_ORIGIN")
+        .unwrap_or_else(|_| "http://localhost:3000".to_owned())
+        .parse::<HeaderValue>()
+        .context("CORS_ALLOWED_ORIGIN must be a valid origin")?;
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::exact(allowed_origin))
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
+
+    let app = router(AppState { db: pool, auth })
+        .layer(cors)
+        .layer(TraceLayer::new_for_http());
 
     let host = env::var("API_HOST").unwrap_or_else(|_| "0.0.0.0".to_owned());
     let port = env::var("API_PORT").unwrap_or_else(|_| "8080".to_owned());
