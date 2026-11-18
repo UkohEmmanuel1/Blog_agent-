@@ -19,3 +19,9 @@ create index if not exists idx_articles_status_updated
 create unique index if not exists idx_social_accounts_platform_identity
     on public.social_accounts(platform, platform_account_id)
     where platform_account_id is not null;
+
+-- A worker may be reclaimed after a process crash. Keep article creation idempotent
+-- for one agent_run so a retry cannot create duplicate drafts.
+create unique index if not exists idx_articles_generated_agent_run
+    on public.articles ((metadata->>'agent_run_id'))
+    where metadata ? 'agent_run_id';
