@@ -363,18 +363,21 @@ async fn publish_social_post(job: &AgentRunJob, pool: &PgPool) -> anyhow::Result
 
     let key = std::env::var("SOCIAL_TOKEN_ENCRYPTION_KEY")
         .context("SOCIAL_TOKEN_ENCRYPTION_KEY must be configured")?;
-    let row = sqlx::query_as::<_, (String, String, Option<String>, String)>(
+    let row = sqlx::query_as::<_, (String, String, Option<String>, String, Option<Uuid>, Option<String>, Option<String>, String)>(
         r#"select p.content, a.platform, a.platform_account_id,
-                  pgp_sym_decrypt(decode(a.access_token_encrypted, 'base64'), $2)::text
+                  pgp_sym_decrypt(decode(a.access_token_encrypted, 'base64'), $2)::text,
+                  p.media_asset_id, m.storage_path, m.mime_type, a.account_name
            from public.social_posts p
            join public.social_accounts a on a.id=p.social_account_id
+           left join public.media_assets m on m.id=p.media_asset_id
            where p.id=$1 and a.is_active=true"#
     ).bind(post_id).bind(key).fetch_one(pool).await?;
-    let (content, platform, account_id, token) = row;
+    let (content, platform, account_id, token, media_asset_id, media_path, media_mime, account_name) = row;
     let character_count = content.chars().count();
     match platform.as_str() {
         "x" | "twitter" if character_count > 280 => anyhow::bail!("X text posts are limited to 280 characters in this adapter"),
         "linkedin" if character_count > 3000 => anyhow::bail!("LinkedIn text posts are limited to 3,000 characters"),
+        "instagram" if character_count > 2200 => anyhow::bail!("Instagram captions are limited to 2,200 characters"),
         _ => {}
     }
     let client = reqwest::Client::builder().timeout(Duration::from_secs(25)).build()?;
@@ -411,6 +414,60 @@ async fn publish_social_post(job: &AgentRunJob, pool: &PgPool) -> anyhow::Result
             if !status.is_success() { anyhow::bail!("LinkedIn API returned {status}: {body}"); }
             if id.is_empty() { anyhow::bail!("LinkedIn API did not return x-restli-id"); }
             (id.clone(), format!("https://www.linkedin.com/feed/update/{id}"))
+        }
+        "instagram" => {
+            let instagram_user_id = account_id.as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| anyhow::anyhow!("Instagram account requires its Instagram professional account ID in platform_account_id"))?;
+            if media_asset_id.is_none() {
+                anyhow::bail!("Instagram publishing requires an attached JPEG image asset");
+            }
+            if media_mime.as_deref() != Some("image/jpeg") {
+                anyhow::bail!("Instagram image publishing currently accepts JPEG assets only");
+            }
+            let storage_path = media_path.as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Attached Instagram media asset has no storage object"))?;
+            let storage = atlas_agents::storage::S3Storage::from_env().await?;
+            let image_url = storage.signed_get_url(storage_path).await?;
+            let base = std::env::var("INSTAGRAM_GRAPH_API_BASE_URL")
+                .unwrap_or_else(|_| "https://graph.facebook.com".to_owned());
+            let version = std::env::var("INSTAGRAM_GRAPH_API_VERSION")
+                .unwrap_or_else(|_| "v24.0".to_owned());
+            let root = format!("{}/{}", base.trim_end_matches('/'), version.trim_start_matches('/'));
+            let container_response = client.post(format!("{root}/{instagram_user_id}/media"))
+                .form(&[("image_url", image_url.as_str()), ("caption", content.as_str()), ("access_token", token.as_str())])
+                .send().await?;
+            let container_status = container_response.status();
+            let container_body: Value = container_response.json().await.unwrap_or_else(|_| json!({}));
+            if !container_status.is_success() {
+                anyhow::bail!("Instagram media container creation failed ({container_status}): {}", container_body.pointer("/error/message").and_then(Value::as_str).unwrap_or("request rejected"));
+            }
+            let creation_id = container_body.get("id").and_then(Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("Instagram did not return a media container ID"))?;
+            let publish_response = client.post(format!("{root}/{instagram_user_id}/media_publish"))
+                .form(&[("creation_id", creation_id), ("access_token", token.as_str())])
+                .send().await?;
+            let publish_status = publish_response.status();
+            let publish_body: Value = publish_response.json().await.unwrap_or_else(|_| json!({}));
+            if !publish_status.is_success() {
+                anyhow::bail!("Instagram media publish failed ({publish_status}): {}", publish_body.pointer("/error/message").and_then(Value::as_str).unwrap_or("request rejected"));
+            }
+            let id = publish_body.get("id").and_then(Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("Instagram publish response did not include media ID"))?.to_owned();
+            let permalink_response = client.get(format!("{root}/{id}"))
+                .query(&[("fields", "permalink"), ("access_token", token.as_str())])
+                .send().await;
+            let profile_name = account_name.trim_start_matches('@');
+            let url = match permalink_response {
+                Ok(response) if response.status().is_success() => {
+                    let data: Value = response.json().await.unwrap_or_else(|_| json!({}));
+                    data.get("permalink").and_then(Value::as_str)
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| format!("https://www.instagram.com/{profile_name}/"))
+                }
+                _ => format!("https://www.instagram.com/{profile_name}/"),
+            };
+            (id, url)
         }
         other => anyhow::bail!("No publishing adapter configured for platform '{other}'"),
     };
