@@ -170,7 +170,14 @@ async fn process_agent_run(job: AgentRunJob, pool: PgPool) -> JobResult {
                 Ok(result) => Ok(result),
                 Err(error) => {
                     tracing::error!(run_id=%job.agent_run_id, %error, "social publish operation failed");
-                    Err(sqlx::Error::Protocol(error.to_string()))
+                    if let Some(post_id) = job.input.get("social_post_id").and_then(Value::as_str)
+                        .and_then(|value| Uuid::parse_str(value).ok()) {
+                        let _ = sqlx::query("update public.social_posts set status='failed',error_message=$2,updated_at=now() where id=$1 and status='publishing'")
+                            .bind(post_id).bind(error.to_string()).execute(&pool).await;
+                    }
+                    sqlx::query("update public.agent_runs set status='failed',error_message=$2,finished_at=now() where id=$1")
+                        .bind(job.agent_run_id).bind(error.to_string()).execute(&pool).await?;
+                    return Ok(());
                 }
             }
         }
