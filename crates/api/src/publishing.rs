@@ -407,7 +407,7 @@ async fn create_revision(
 fn media_signature_matches(content_type: &str, bytes: &[u8]) -> bool {
     match content_type {
         "image/jpeg" => bytes.starts_with(&[0xFF, 0xD8, 0xFF]),
-        "image/png" => bytes.starts_with(b"\\x89PNG\\r\\n\\x1a\\n"),
+        "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
         "image/webp" => bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
         "video/mp4" => bytes.len() >= 12 && &bytes[4..8] == b"ftyp",
         "audio/mpeg" => bytes.starts_with(b"ID3") || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0),
