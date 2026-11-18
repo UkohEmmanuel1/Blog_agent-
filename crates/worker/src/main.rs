@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     WorkerBuilder::new("atlas-agent-runs")
         .concurrency(4)
         .backend(storage)
-        .build_fn(move |job: AgentRunJob| {
+        .build(move |job: AgentRunJob| {
             let pool = worker_pool.clone();
             async move { process_agent_run(job, pool).await }
         })
