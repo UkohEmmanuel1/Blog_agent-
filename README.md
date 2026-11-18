@@ -145,12 +145,12 @@ This returns platform-specific draft text in the agent run output. It does not c
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/api/v1/articles/{id}/revisions` | Save an article revision and return it to draft |
+| GET | `/api/v1/articles/{id}/revisions` | Retrieve revision history |\n| POST | `/api/v1/articles/{id}/revisions` | Save an article revision and return it to draft |
 | POST | `/api/v1/articles/{id}/submit-for-review` | Submit an article for review |
-| POST | `/api/v1/approvals/{id}/decision` | Approve, reject, or request changes |
+| GET | `/api/v1/approvals?status=pending` | List approval queue (reviewer/admin) |\n| POST | `/api/v1/approvals/{id}/decision` | Approve, reject, or request changes |
 | GET | `/api/v1/social-accounts` | List connected accounts without exposing credentials |
 | POST | `/api/v1/social-accounts` | Connect an X or LinkedIn account |
-| POST | `/api/v1/social-posts` | Create a social post draft |
+| GET | `/api/v1/social-posts?status=draft` | List social post drafts and statuses |\n| POST | `/api/v1/social-posts` | Create a social post draft |
 | POST | `/api/v1/social-posts/{id}/submit-for-review` | Submit a post for approval |
 | POST | `/api/v1/media` | Upload media to private object storage |
 
@@ -173,7 +173,7 @@ Example request:
 
 For X, use an OAuth user-context access token with the appropriate posting permissions (for OAuth 2.0 PKCE, commonly `tweet.read`, `tweet.write`, and `users.read`). For LinkedIn, provide an access token with the required member or organization posting permission and set `platform_account_id` to the author URN, such as `urn:li:person:...` or `urn:li:organization:...`.
 
-ATLAS implements text-post publishing adapters for X and LinkedIn. LinkedIn's API version is configurable through `LINKEDIN_VERSION`. Provider access, approved scopes, app review, rate limits, and platform terms remain controlled by the respective platforms. Token refresh and OAuth consent screens are not implemented in this phase; replace expired tokens through a secure credential-rotation workflow.
+ATLAS implements text-post publishing adapters for X and LinkedIn. Social posts and approval queues can be listed through the read endpoints above. LinkedIn's API version is configurable through `LINKEDIN_VERSION`. Provider access, approved scopes, app review, rate limits, and platform terms remain controlled by the respective platforms. Token refresh and OAuth consent screens are not implemented in this phase; replace expired tokens through a secure credential-rotation workflow.
 
 ### Approval example
 
