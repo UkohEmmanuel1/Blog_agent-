@@ -230,11 +230,11 @@ async fn create_social_post(
            from public.social_accounts a
            where a.id=$2 and a.is_active=true
              and (a.platform <> 'instagram' or $5::uuid is not null)
-             and ($5::uuid is null or exists (
+             and ($5::uuid is null or (a.platform='instagram' and exists (
                  select 1 from public.media_assets m
                  where m.id=$5 and m.media_type='image' and m.mime_type='image/jpeg'
                    and (m.uploaded_by=$6 or $7='admin')
-             ))
+             )))
            returning id,article_id,social_account_id,media_asset_id,platform_post_id,content,status,scheduled_at,
                      published_at,platform_url,error_message,metadata,created_at,updated_at"#
     ).bind(request.article_id).bind(request.social_account_id).bind(request.content)
