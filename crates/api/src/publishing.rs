@@ -32,7 +32,13 @@ struct ConnectAccountRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct RotateTokenRequest {\n    access_token: String,\n    token_expires_at: Option<DateTime<Utc>>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct CreateSocialPostRequest {
+struct RotateTokenRequest {
+    access_token: String,
+    token_expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateSocialPostRequest {
     social_account_id: Uuid,
     article_id: Option<Uuid>,
     content: String,
@@ -407,7 +413,8 @@ async fn signed_media_url(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/social-accounts", get(list_accounts).post(connect_account))\n        .route("/social-accounts/{account_id}/credentials", put(rotate_account_token))
+        .route("/social-accounts", get(list_accounts).post(connect_account))
+        .route("/social-accounts/{account_id}/credentials", put(rotate_account_token))
         .route("/social-posts", get(list_social_posts).post(create_social_post))
         .route("/approvals", get(list_approvals))
         .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
