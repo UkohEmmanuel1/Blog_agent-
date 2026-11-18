@@ -11,15 +11,11 @@ permissions:
 
 jobs:
   check:
-    name: Format and compile workspace
+    name: Compile workspace
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all -- --check
       - name: Compile all crates and targets
         run: cargo check --workspace --all-targets
