@@ -285,19 +285,21 @@ async fn run_article_writer(job: &AgentRunJob, pool: &PgPool) -> Result<Value, s
     let proposed_slug = value.get("slug").and_then(Value::as_str).unwrap_or(title);
     let proposed_article_id = Uuid::new_v4();
     let slug = format!("{}-{}", slugify(proposed_slug), &proposed_article_id.simple().to_string()[..8]);
+    let author_id: Option<Uuid> = sqlx::query_scalar("select initiated_by from public.agent_runs where id=$1")
+        .bind(job.agent_run_id).fetch_one(pool).await?;
     let mut tx = pool.begin().await?;
     let inserted = sqlx::query_scalar::<_, Uuid>(
-        r#"insert into public.articles (id, story_id, title, slug, dek, body_markdown, status, metadata)
-           values ($1,$2,$3,$4,$5,$6,'draft',$7)
+        r#"insert into public.articles (id, story_id, title, slug, dek, body_markdown, status, metadata, author_id)
+           values ($1,$2,$3,$4,$5,$6,'draft',$7,$8)
            on conflict ((metadata->>'agent_run_id')) where metadata ? 'agent_run_id' do nothing
            returning id"#
     ).bind(proposed_article_id).bind(story_id).bind(title).bind(&slug).bind(dek).bind(body)
-     .bind(json!({"generated_by":"atlas","agent_run_id":job.agent_run_id}))
-     .fetch_optional(&mut *tx).await?;
+      .bind(json!({"generated_by":"atlas","agent_run_id":job.agent_run_id}))
+     .bind(author_id).fetch_optional(&mut *tx).await?;
     let article_id = match inserted {
         Some(id) => {
-            sqlx::query("insert into public.article_revisions (article_id, revision_number, title, body_markdown, change_summary) values ($1,1,$2,$3,'Initial AI-generated draft') on conflict (article_id,revision_number) do nothing")
-                .bind(id).bind(title).bind(body).execute(&mut *tx).await?;
+            sqlx::query("insert into public.article_revisions (article_id, revision_number, title, body_markdown, change_summary,created_by) values ($1,1,$2,$3,'Initial AI-generated draft',$4) on conflict (article_id,revision_number) do nothing")
+                 .bind(id).bind(title).bind(body).bind(author_id).execute(&mut *tx).await?;
             id
         }
         None => {
