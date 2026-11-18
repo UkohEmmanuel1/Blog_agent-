@@ -193,6 +193,7 @@ async fn list_agent_runs(
     Ok(Json(rows))
 }
 
+#[path = "publishing.rs"]
 mod publishing;
 
 pub fn router(state: AppState) -> Router {
