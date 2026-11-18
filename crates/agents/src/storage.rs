@@ -3,9 +3,10 @@ use aws_config::{BehaviorVersion, Region};
 use aws_sdk_s3::{
     config::{retry::RetryConfig, Credentials},
     primitives::ByteStream,
+    presigning::PresigningConfig,
     Client,
 };
-use std::env;
+use std::{env, time::Duration};
 
 #[derive(Clone)]
 pub struct S3Storage {
@@ -46,6 +47,17 @@ impl S3Storage {
             .await
             .context("Supabase S3 object upload failed")?;
         Ok(())
+    }
+
+    pub async fn signed_get_url(&self, key: &str) -> Result<String> {
+        let config = PresigningConfig::expires_in(Duration::from_secs(900))?;
+        let request = self.client.get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .presigned(config)
+            .await
+            .context("could not create signed media URL")?;
+        Ok(request.uri().to_string())
     }
 
     pub fn bucket(&self) -> &str {
