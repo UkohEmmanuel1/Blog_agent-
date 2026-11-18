@@ -1,7 +1,7 @@
 use crate::{auth::AuthenticatedUser, state::AppState};
 use atlas_core::models::{Approval, ArticleRevision, SocialPost};
 use axum::{
-    extract::{DefaultBodyLimit, Extension, Path, State},
+    extract::{DefaultBodyLimit, Extension, Path, Query, State},
     http::StatusCode,
     routing::{get, patch, post, put},
     Json, Router,
