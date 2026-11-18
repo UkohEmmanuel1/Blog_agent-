@@ -286,7 +286,7 @@ async fn run_article_writer(job: &AgentRunJob, pool: &PgPool) -> Result<Value, s
     let slug = slugify(proposed_slug);
     let proposed_article_id = Uuid::new_v4();
     let mut tx = pool.begin().await?;
-    let inserted = sqlx::query(
+    let inserted = sqlx::query_scalar::<_, Uuid>(
         r#"insert into public.articles (id, story_id, title, slug, dek, body_markdown, status, metadata)
            values ($1,$2,$3,$4,$5,$6,'draft',$7)
            on conflict ((metadata->>'agent_run_id')) where metadata ? 'agent_run_id' do nothing
@@ -295,7 +295,7 @@ async fn run_article_writer(job: &AgentRunJob, pool: &PgPool) -> Result<Value, s
      .bind(json!({"generated_by":"atlas","agent_run_id":job.agent_run_id}))
      .fetch_optional(&mut *tx).await?;
     let article_id = match inserted {
-        Some((id,)) => {
+        Some(id) => {
             sqlx::query("insert into public.article_revisions (article_id, revision_number, title, body_markdown, change_summary) values ($1,1,$2,$3,'Initial AI-generated draft') on conflict (article_id,revision_number) do nothing")
                 .bind(id).bind(title).bind(body).execute(&mut *tx).await?;
             id
