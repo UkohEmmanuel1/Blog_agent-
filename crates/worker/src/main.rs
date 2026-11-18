@@ -43,8 +43,8 @@ async fn main() -> Result<()> {
     tracing::info!("ATLAS worker online; consuming agent-run jobs");
     let worker_pool = pool.clone();
     WorkerBuilder::new("atlas-agent-runs")
-        .concurrency(4)
         .backend(storage)
+        .concurrency(4)
         .build(move |job: AgentRunJob| {
             let pool = worker_pool.clone();
             async move { process_agent_run(job, pool).await }
