@@ -62,7 +62,7 @@ The schema references Supabase-managed `auth.users(id)`; user identities must be
 
 All `/api/v1/*` endpoints require `Authorization: Bearer <Supabase access token>`. JWT signatures are checked against the project's JWKS; issuer, audience, expiry, subject, and the Supabase `authenticated` role are validated. Application permissions come from `public.users.role`, not user-editable JWT metadata.
 
-New application profiles default to `viewer`. First sign in and call `GET /api/v1/me` to provision the profile, then assign trusted operators explicitly from the Supabase SQL editor after verifying their identity:
+New application profiles default to `viewer` (enforced by migration `202611180007_security_defaults.sql`). First sign in and call `GET /api/v1/me` to provision the profile, then assign trusted operators explicitly from the Supabase SQL editor after verifying their identity:
 
 ```sql
 update public.users set role = 'admin' where email = 'your-verified-email@example.com';
@@ -135,7 +135,7 @@ This returns platform-specific draft text in the agent run output. It does not c
 
 ### Upload media
 
-`POST /api/v1/media` accepts JSON with `filename`, `content_type`, `base64_data`, optional `article_id`, and optional `alt_text`. Supported MIME types are JPEG, PNG, WebP, MP4, MPEG audio, and PDF. Maximum decoded file size is 10 MB.
+`POST /api/v1/media` accepts JSON with `filename`, `content_type`, `base64_data`, optional `article_id`, and optional `alt_text`. Supported MIME types are JPEG, PNG, WebP, MP4, MPEG audio, and PDF. Maximum decoded file size is 10 MB. The API checks file signatures against the declared MIME type; the client-provided MIME type alone is not trusted.
 
 `GET /api/v1/media/{asset_id}/url` returns a private, signed download URL valid for 15 minutes. The object remains in Supabase Storage; the database stores its bucket, path, MIME type, and metadata.
 
