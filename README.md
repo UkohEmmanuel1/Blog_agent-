@@ -16,7 +16,7 @@ ATLAS is a Rust multi-agent content research, writing, review, media, and social
 - Supabase project with PostgreSQL, Auth, and Storage
 - Redis 6+ compatible service (local Redis or managed Redis/Valkey)
 - OpenAI and/or Anthropic API key
-- X developer app and/or LinkedIn developer app with the relevant publishing permissions
+- X, LinkedIn, and/or Meta developer apps with the relevant publishing permissions
 - SQLx CLI
 
 ## Configure
@@ -26,7 +26,7 @@ Copy `.env.example` to `.env` and set:
 - `DATABASE_URL`, `SUPABASE_URL`, `REDIS_URL`
 - `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY`
 - `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`
-- `SOCIAL_TOKEN_ENCRYPTION_KEY`
+- `SOCIAL_TOKEN_ENCRYPTION_KEY`, `INSTAGRAM_GRAPH_API_BASE_URL`, and `INSTAGRAM_GRAPH_API_VERSION` when publishing to Instagram
 - `CORS_ALLOWED_ORIGIN` to your frontend's exact origin
 
 The API fetches Supabase asymmetric signing keys from `/auth/v1/.well-known/jwks.json` and refreshes the key set when it encounters an unknown key ID. Set `SUPABASE_JWKS_URL` only for a custom JWKS endpoint. Legacy projects can set `SUPABASE_JWT_SECRET` for HS256; asymmetric signing is preferred.
@@ -126,7 +126,7 @@ The writer creates an article with `draft` status and an initial article revisio
   "task_type": "content.social_copy",
   "input": {
     "article_text": "The article text to adapt...",
-    "platforms": ["x", "linkedin"]
+    "platforms": ["x", "linkedin", "instagram"]
   }
 }
 ```
@@ -151,10 +151,10 @@ This returns platform-specific draft text in the agent run output. It does not c
 | GET | `/api/v1/approvals?status=pending` | List approval queue (reviewer/admin) |
 | POST | `/api/v1/approvals/{id}/decision` | Approve, reject, or request changes |
 | GET | `/api/v1/social-accounts` | List connected accounts without exposing credentials |
-| POST | `/api/v1/social-accounts` | Connect an X or LinkedIn account |
+| POST | `/api/v1/social-accounts` | Connect an X, LinkedIn or Instagram account |
 | PUT | `/api/v1/social-accounts/{id}/credentials` | Rotate an account access token |
 | GET | `/api/v1/social-posts?status=draft` | List social post drafts and statuses |
-| POST | `/api/v1/social-posts` | Create a social post draft |
+| POST | `/api/v1/social-posts` | Create a social post draft (attach `media_asset_id` for Instagram) |
 | PATCH | `/api/v1/social-posts/{id}` | Edit a draft social post |
 | POST | `/api/v1/social-posts/{id}/submit-for-review` | Submit a post for approval |
 | POST | `/api/v1/media` | Upload media to private object storage |
@@ -176,9 +176,22 @@ Example request:
 }
 ```
 
-For X, use an OAuth user-context access token with the appropriate posting permissions (for OAuth 2.0 PKCE, commonly `tweet.read`, `tweet.write`, and `users.read`). For LinkedIn, provide an access token with the required member or organization posting permission and set `platform_account_id` to the author URN, such as `urn:li:person:...` or `urn:li:organization:...`.
+For X, use an OAuth user-context access token with the appropriate posting permissions (for OAuth 2.0 PKCE, commonly `tweet.read`, `tweet.write`, and `users.read`). For LinkedIn, provide an access token with the required member or organization posting permission and set `platform_account_id` to the author URN, such as `urn:li:person:...` or `urn:li:organization:...`. For Instagram, connect an Instagram Business or Creator professional account, provide its Instagram professional account ID as `platform_account_id`, and use an access token granted the content-publishing permission for the Meta login product you configured. Personal Instagram accounts are not supported.
 
-ATLAS implements text-post publishing adapters for X and LinkedIn. Social posts and approval queues can be listed through the read endpoints above. LinkedIn's API version is configurable through `LINKEDIN_VERSION`. Provider access, approved scopes, app review, rate limits, and platform terms remain controlled by the respective platforms. OAuth consent screens and automatic token refresh are not implemented in this phase; replace expired tokens through the authenticated credential-rotation endpoint.
+Instagram publishing currently supports single JPEG image posts. Upload the JPEG first through `POST /api/v1/media`, then create a social post with its returned asset ID:
+
+```json
+{
+  "social_account_id": "INSTAGRAM_SOCIAL_ACCOUNT_UUID",
+  "content": "Caption text #ATLAS",
+  "scheduled_at": null,
+  "media_asset_id": "JPEG_MEDIA_ASSET_UUID"
+}
+```
+
+The worker generates a short-lived signed Supabase Storage URL, creates an Instagram media container, and publishes that container after the post has passed editorial approval. The signed URL is used server-to-server and is not returned in the social post response. Configure `INSTAGRAM_GRAPH_API_BASE_URL` to `https://graph.facebook.com` for the Facebook Login path or `https://graph.instagram.com` for Instagram Login, and set `INSTAGRAM_GRAPH_API_VERSION` to a supported version for your Meta app. Only JPEG assets are accepted for this Instagram adapter; carousel, Reels/video, Stories, OAuth consent screens, and automatic token refresh are not implemented yet.
+
+ATLAS implements text-post publishing adapters for X and LinkedIn, plus single-image JPEG publishing for Instagram. Social posts and approval queues can be listed through the read endpoints above. LinkedIn's API version is configurable through `LINKEDIN_VERSION`. Provider access, approved scopes, app review, rate limits, account eligibility and platform terms remain controlled by the respective platforms. OAuth consent screens and automatic token refresh are not implemented in this phase; replace expired tokens through the authenticated credential-rotation endpoint.
 
 ### Approval example
 
