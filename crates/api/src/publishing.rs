@@ -3,7 +3,7 @@ use atlas_core::models::{Approval, ArticleRevision, SocialPost};
 use axum::{
     extract::{DefaultBodyLimit, Extension, Path, State},
     http::StatusCode,
-    routing::{get, post, put},
+    routing::{get, patch, post, put},
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -46,7 +46,7 @@ struct CreateSocialPostRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct CreateRevisionRequest {
+struct UpdateSocialPostRequest {\n    content: String,\n    scheduled_at: Option<DateTime<Utc>>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct CreateRevisionRequest {
     title: String,
     body_markdown: String,
     change_summary: Option<String>,
@@ -222,6 +222,26 @@ async fn create_social_post(
      .bind(request.scheduled_at).fetch_optional(&state.db).await.map_err(internal)?
      .ok_or_else(|| bad_request("The selected social account does not exist or is inactive."))?;
     Ok((StatusCode::CREATED, Json(row)))
+}
+
+
+async fn update_social_post(
+    State(state): State<AppState>,
+    Extension(identity): Extension<AuthenticatedUser>,
+    Path(post_id): Path<Uuid>,
+    Json(request): Json<UpdateSocialPostRequest>,
+) -> Result<Json<SocialPost>, (StatusCode, Json<Value>)> {
+    let user = app_user(&state, &identity).await?;
+    if !matches!(user.role.as_str(), "admin" | "editor") { return Err(forbidden()); }
+    if request.content.trim().is_empty() || request.content.len() > 20_000 {
+        return Err(bad_request("Post content must contain between 1 and 20,000 bytes."));
+    }
+    let row = sqlx::query_as::<_, SocialPost>(
+        "update public.social_posts set content=$2,scheduled_at=$3,updated_at=now() where id=$1 and status='draft' returning *"
+    ).bind(post_id).bind(request.content).bind(request.scheduled_at)
+     .fetch_optional(&state.db).await.map_err(internal)?
+     .ok_or_else(|| bad_request("Social post not found or no longer editable."))?;
+    Ok(Json(row))
 }
 
 async fn submit_article(
@@ -415,7 +435,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/social-accounts", get(list_accounts).post(connect_account))
         .route("/social-accounts/{account_id}/credentials", put(rotate_account_token))
-        .route("/social-posts", get(list_social_posts).post(create_social_post))
+        .route("/social-posts", get(list_social_posts).post(create_social_post))\n        .route("/social-posts/{post_id}", patch(update_social_post))
         .route("/approvals", get(list_approvals))
         .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
         .route("/social-posts/{post_id}/submit-for-review", post(submit_social_post))
