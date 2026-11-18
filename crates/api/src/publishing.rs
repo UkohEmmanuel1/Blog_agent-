@@ -3,7 +3,7 @@ use atlas_core::models::{Approval, ArticleRevision, SocialPost};
 use axum::{
     extract::{DefaultBodyLimit, Extension, Path, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -32,7 +32,7 @@ struct ConnectAccountRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct CreateSocialPostRequest {
+struct RotateTokenRequest {\n    access_token: String,\n    token_expires_at: Option<DateTime<Utc>>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct CreateSocialPostRequest {
     social_account_id: Uuid,
     article_id: Option<Uuid>,
     content: String,
@@ -175,6 +175,26 @@ async fn connect_account(
      .bind(request.access_token).bind(key).bind(user.id)
      .fetch_one(&state.db).await.map_err(internal)?;
     Ok((StatusCode::CREATED, Json(row)))
+}
+
+
+async fn rotate_account_token(
+    State(state): State<AppState>,
+    Extension(identity): Extension<AuthenticatedUser>,
+    Path(account_id): Path<Uuid>,
+    Json(request): Json<RotateTokenRequest>,
+) -> Result<StatusCode, (StatusCode, Json<Value>)> {
+    let user = app_user(&state, &identity).await?;
+    if !matches!(user.role.as_str(), "admin" | "editor") { return Err(forbidden()); }
+    if request.access_token.trim().is_empty() { return Err(bad_request("access_token is required.")); }
+    let key = std::env::var("SOCIAL_TOKEN_ENCRYPTION_KEY")
+        .map_err(|_| bad_request("SOCIAL_TOKEN_ENCRYPTION_KEY is not configured on the API server."))?;
+    let changed = sqlx::query(
+        "update public.social_accounts set access_token_encrypted=encode(pgp_sym_encrypt($2,$3),'base64'),token_expires_at=$4,updated_at=now() where id=$1 and is_active=true"
+    ).bind(account_id).bind(request.access_token).bind(key).bind(request.token_expires_at)
+     .execute(&state.db).await.map_err(internal)?;
+    if changed.rows_affected() == 0 { return Err(bad_request("Social account not found or inactive.")); }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn create_social_post(
@@ -387,7 +407,7 @@ async fn signed_media_url(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/social-accounts", get(list_accounts).post(connect_account))
+        .route("/social-accounts", get(list_accounts).post(connect_account))\n        .route("/social-accounts/{account_id}/credentials", put(rotate_account_token))
         .route("/social-posts", get(list_social_posts).post(create_social_post))
         .route("/approvals", get(list_approvals))
         .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
