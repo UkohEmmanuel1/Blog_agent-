@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use rig::{
     agent::AgentBuilder,
-    prelude::*,
     providers::{anthropic::Anthropic, openai::OpenAI},
 };
 
@@ -30,5 +29,5 @@ pub async fn generate(
         }
         other => anyhow::bail!("Unsupported LLM provider: {other}. Configure openai or anthropic."),
     };
-    Ok(response)
+    Ok(response.to_string())
 }
