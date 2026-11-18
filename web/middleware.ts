@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";\ntype CookieWrite = { name: string; value: string; options?: Parameters<NextResponse["cookies"]["set"]>[2] };
+import { NextResponse, type NextRequest } from "next/server";
+type CookieWrite = { name: string; value: string; options?: Parameters<NextResponse["cookies"]["set"]>[2] };
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
