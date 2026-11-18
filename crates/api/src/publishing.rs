@@ -46,7 +46,13 @@ struct CreateSocialPostRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct UpdateSocialPostRequest {\n    content: String,\n    scheduled_at: Option<DateTime<Utc>>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct CreateRevisionRequest {
+struct UpdateSocialPostRequest {
+    content: String,
+    scheduled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateRevisionRequest {
     title: String,
     body_markdown: String,
     change_summary: Option<String>,
@@ -435,7 +441,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/social-accounts", get(list_accounts).post(connect_account))
         .route("/social-accounts/{account_id}/credentials", put(rotate_account_token))
-        .route("/social-posts", get(list_social_posts).post(create_social_post))\n        .route("/social-posts/{post_id}", patch(update_social_post))
+        .route("/social-posts", get(list_social_posts).post(create_social_post))
+        .route("/social-posts/{post_id}", patch(update_social_post))
         .route("/approvals", get(list_approvals))
         .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
         .route("/social-posts/{post_id}/submit-for-review", post(submit_social_post))
