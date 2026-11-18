@@ -19,3 +19,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Compile all crates and targets
         run: cargo check --workspace --all-targets
+      - name: Run workspace tests
+        run: cargo test --workspace --all-targets
