@@ -19,7 +19,7 @@ ATLAS is a Rust multi-agent content research, writing, review, media, and publis
 
 ## Configure
 
-Copy `.env.example` to `.env` and set `DATABASE_URL`, `SUPABASE_URL`, and `REDIS_URL`. The API fetches the Supabase project's asymmetric signing keys from `/auth/v1/.well-known/jwks.json` at startup. Set `SUPABASE_JWKS_URL` only if you use a custom JWKS endpoint.
+Copy `.env.example` to `.env` and set `DATABASE_URL`, `SUPABASE_URL`, `REDIS_URL`, and `CORS_ALLOWED_ORIGIN` to your frontend's exact origin. The API fetches the Supabase project's asymmetric signing keys from `/auth/v1/.well-known/jwks.json` at startup and refreshes the key set if it encounters an unknown key ID. Set `SUPABASE_JWKS_URL` only if you use a custom JWKS endpoint. Legacy projects can set `SUPABASE_JWT_SECRET` for HS256 verification; prefer asymmetric signing keys when available.
 
 Use the Supabase Transaction Pooler (commonly port 6543) for pooled application traffic. Use a direct or Session Pooler connection for migrations where required. Never commit `.env` or credentials.
 
@@ -36,7 +36,7 @@ The schema references Supabase-managed `auth.users(id)`; user identities must be
 
 ## Phase 2 — API and authentication
 
-The API exposes:
+The API exposes (browser requests are restricted to the exact `CORS_ALLOWED_ORIGIN` configured on the server):
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -50,7 +50,7 @@ The API exposes:
 
 All `/api/v1/*` endpoints require `Authorization: Bearer <Supabase access token>`. JWT signatures are checked against the project's JWKS; issuer, audience, expiry, subject, and the Supabase `authenticated` database role are validated. Application permissions come from `public.users.role`, not user-editable JWT metadata.
 
-Only `admin` and `editor` application roles can submit jobs. Assign trusted operators explicitly from the Supabase SQL editor after verifying their identity:
+Only `admin` and `editor` application roles can submit jobs. New profiles default to the `viewer` role. First sign in and call `GET /api/v1/me` to provision the application profile, then assign trusted operators explicitly from the Supabase SQL editor after verifying their identity:
 
 ```sql
 update public.users set role = 'admin' where email = 'your-verified-email@example.com';
