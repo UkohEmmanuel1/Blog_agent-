@@ -5,7 +5,7 @@ create table if not exists public.users (
     id uuid primary key references auth.users(id) on delete cascade,
     email text unique,
     display_name text,
-    role text not null default 'editor'
+    role text not null default 'viewer'
         check (role in ('admin', 'editor', 'reviewer', 'viewer')),
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()

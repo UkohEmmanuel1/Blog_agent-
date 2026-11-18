@@ -6,7 +6,11 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+atlas-agents = { path = "../agents" }
+atlas-core = { path = "../core" }
 axum.workspace = true
+base64.workspace = true
+chrono.workspace = true
 dotenvy.workspace = true
 jsonwebtoken.workspace = true
 reqwest.workspace = true
@@ -18,4 +22,3 @@ tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
-atlas-core = { path = "../core" }

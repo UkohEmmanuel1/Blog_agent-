@@ -105,9 +105,9 @@ async fn create_agent_run(
 
     // Deterministic tasks verify the queue and persistence pipeline. LLM-backed
     // agent execution is intentionally added in Phase 4.
-    if !matches!(request.task_type.as_str(), "system.health_check" | "system.echo") {
+    if !matches!(request.task_type.as_str(), "system.health_check" | "system.echo" | "content.research" | "content.write_article" | "content.social_copy") {
         return Err(ApiError::Validation(
-            "Phase 3 supports system.health_check and system.echo; agent execution arrives in Phase 4".into(),
+            "Supported tasks: system.health_check, system.echo, content.research, content.write_article, content.social_copy".into(),
         ));
     }
 
@@ -193,6 +193,9 @@ async fn list_agent_runs(
     Ok(Json(rows))
 }
 
+#[path = "publishing.rs"]
+mod publishing;
+
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/me", get(me))
@@ -200,6 +203,7 @@ pub fn router(state: AppState) -> Router {
         .route("/articles", get(list_articles))
         .route("/agent-runs", get(list_agent_runs).post(create_agent_run))
         .route("/agent-runs/{run_id}", get(get_agent_run))
+        .merge(publishing::router())
         .route_layer(middleware::from_fn_with_state(
             state.auth.clone(),
             require_auth,

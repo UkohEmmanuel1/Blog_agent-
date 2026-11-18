@@ -25,6 +25,7 @@ pub struct SocialPost {
     pub id: Uuid,
     pub article_id: Option<Uuid>,
     pub social_account_id: Uuid,
+    pub media_asset_id: Option<Uuid>,
     pub platform_post_id: Option<String>,
     pub content: String,
     pub status: String,
