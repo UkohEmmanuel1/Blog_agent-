@@ -145,12 +145,15 @@ This returns platform-specific draft text in the agent run output. It does not c
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/api/v1/articles/{id}/revisions` | Retrieve revision history |\n| POST | `/api/v1/articles/{id}/revisions` | Save an article revision and return it to draft |
+| GET | `/api/v1/articles/{id}/revisions` | Retrieve revision history |
+| POST | `/api/v1/articles/{id}/revisions` | Save an article revision and return it to draft |
 | POST | `/api/v1/articles/{id}/submit-for-review` | Submit an article for review |
-| GET | `/api/v1/approvals?status=pending` | List approval queue (reviewer/admin) |\n| POST | `/api/v1/approvals/{id}/decision` | Approve, reject, or request changes |
+| GET | `/api/v1/approvals?status=pending` | List approval queue (reviewer/admin) |
+| POST | `/api/v1/approvals/{id}/decision` | Approve, reject, or request changes |
 | GET | `/api/v1/social-accounts` | List connected accounts without exposing credentials |
 | POST | `/api/v1/social-accounts` | Connect an X or LinkedIn account |
-| GET | `/api/v1/social-posts?status=draft` | List social post drafts and statuses |\n| POST | `/api/v1/social-posts` | Create a social post draft |
+| GET | `/api/v1/social-posts?status=draft` | List social post drafts and statuses |
+| POST | `/api/v1/social-posts` | Create a social post draft |
 | POST | `/api/v1/social-posts/{id}/submit-for-review` | Submit a post for approval |
 | POST | `/api/v1/media` | Upload media to private object storage |
 
