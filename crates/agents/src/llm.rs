@@ -29,5 +29,5 @@ pub async fn generate(
         }
         other => anyhow::bail!("Unsupported LLM provider: {other}. Configure openai or anthropic."),
     };
-    Ok(response.to_string())
+    Ok(response.output())
 }
