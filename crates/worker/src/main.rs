@@ -284,14 +284,27 @@ async fn run_article_writer(job: &AgentRunJob, pool: &PgPool) -> Result<Value, s
         .ok_or_else(|| sqlx::Error::Protocol("article writer did not return body_markdown".into()))?;
     let proposed_slug = value.get("slug").and_then(Value::as_str).unwrap_or(title);
     let slug = slugify(proposed_slug);
-    let article_id = Uuid::new_v4();
+    let proposed_article_id = Uuid::new_v4();
     let mut tx = pool.begin().await?;
-    sqlx::query("insert into public.articles (id, story_id, title, slug, dek, body_markdown, status, metadata) values ($1,$2,$3,$4,$5,$6,'draft',$7)")
-        .bind(article_id).bind(story_id).bind(title).bind(&slug).bind(dek).bind(body)
-        .bind(json!({"generated_by":"atlas","agent_run_id":job.agent_run_id}))
-        .execute(&mut *tx).await?;
-    sqlx::query("insert into public.article_revisions (article_id, revision_number, title, body_markdown, change_summary) values ($1,1,$2,$3,'Initial AI-generated draft')")
-        .bind(article_id).bind(title).bind(body).execute(&mut *tx).await?;
+    let inserted = sqlx::query(
+        r#"insert into public.articles (id, story_id, title, slug, dek, body_markdown, status, metadata)
+           values ($1,$2,$3,$4,$5,$6,'draft',$7)
+           on conflict ((metadata->>'agent_run_id')) where metadata ? 'agent_run_id' do nothing
+           returning id"#
+    ).bind(proposed_article_id).bind(story_id).bind(title).bind(&slug).bind(dek).bind(body)
+     .bind(json!({"generated_by":"atlas","agent_run_id":job.agent_run_id}))
+     .fetch_optional(&mut *tx).await?;
+    let article_id = match inserted {
+        Some((id,)) => {
+            sqlx::query("insert into public.article_revisions (article_id, revision_number, title, body_markdown, change_summary) values ($1,1,$2,$3,'Initial AI-generated draft') on conflict (article_id,revision_number) do nothing")
+                .bind(id).bind(title).bind(body).execute(&mut *tx).await?;
+            id
+        }
+        None => {
+            sqlx::query_scalar::<_, Uuid>("select id from public.articles where metadata->>'agent_run_id'=$1")
+                .bind(job.agent_run_id.to_string()).fetch_one(&mut *tx).await?
+        }
+    };
     tx.commit().await?;
     Ok(json!({"article_id":article_id,"title":title,"slug":slug,"status":"draft"}))
 }
