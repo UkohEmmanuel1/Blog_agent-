@@ -43,6 +43,7 @@ struct CreateSocialPostRequest {
     article_id: Option<Uuid>,
     content: String,
     scheduled_at: Option<DateTime<Utc>>,
+    media_asset_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,8 +171,8 @@ async fn connect_account(
     let user = app_user(&state, &identity).await?;
     if !matches!(user.role.as_str(), "admin" | "editor") { return Err(forbidden()); }
     let platform = request.platform.to_ascii_lowercase();
-    if !matches!(platform.as_str(), "x" | "twitter" | "linkedin") {
-        return Err(bad_request("Supported platforms are x and linkedin."));
+    if !matches!(platform.as_str(), "x" | "twitter" | "linkedin" | "instagram") {
+        return Err(bad_request("Supported platforms are x, linkedin and instagram."));
     }
     if request.access_token.trim().is_empty() || request.account_name.trim().is_empty() {
         return Err(bad_request("account_name and access_token are required."));
@@ -220,13 +221,23 @@ async fn create_social_post(
         return Err(bad_request("Post content must contain between 1 and 20,000 bytes."));
     }
     let row = sqlx::query_as::<_, SocialPost>(
-        r#"insert into public.social_posts (article_id,social_account_id,content,status,scheduled_at)
-           select $1,id,$3,'draft',$4 from public.social_accounts where id=$2 and is_active=true
-           returning id,article_id,social_account_id,platform_post_id,content,status,scheduled_at,
+        r#"insert into public.social_posts
+             (article_id,social_account_id,content,status,scheduled_at,media_asset_id)
+           select $1,a.id,$3,'draft',$4,$5
+           from public.social_accounts a
+           where a.id=$2 and a.is_active=true
+             and (a.platform <> 'instagram' or $5::uuid is not null)
+             and ($5::uuid is null or exists (
+                 select 1 from public.media_assets m
+                 where m.id=$5 and m.media_type='image' and m.mime_type='image/jpeg'
+                   and (m.uploaded_by=$6 or $7='admin')
+             ))
+           returning id,article_id,social_account_id,media_asset_id,platform_post_id,content,status,scheduled_at,
                      published_at,platform_url,error_message,metadata,created_at,updated_at"#
     ).bind(request.article_id).bind(request.social_account_id).bind(request.content)
-     .bind(request.scheduled_at).fetch_optional(&state.db).await.map_err(internal)?
-     .ok_or_else(|| bad_request("The selected social account does not exist or is inactive."))?;
+     .bind(request.scheduled_at).bind(request.media_asset_id).bind(user.id).bind(user.role)
+     .fetch_optional(&state.db).await.map_err(internal)?
+     .ok_or_else(|| bad_request("Choose an active account and attach a JPEG image uploaded by you (Instagram requires an image)."))?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
