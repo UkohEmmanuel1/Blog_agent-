@@ -289,7 +289,7 @@ async fn decide_approval(
             let status = match request.decision.as_str() {
                 "approved" => "approved",
                 "rejected" => "rejected",
-                _ => "in_review",
+                _ => "draft",
             };
             sqlx::query("update public.articles set status=$2,editor_id=$3,updated_at=now() where id=$1")
                 .bind(approval.1).bind(status).bind(user.id).execute(&mut *tx).await.map_err(internal)?;
