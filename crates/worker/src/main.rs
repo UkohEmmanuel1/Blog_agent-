@@ -283,8 +283,8 @@ async fn run_article_writer(job: &AgentRunJob, pool: &PgPool) -> Result<Value, s
     let body = value.get("body_markdown").and_then(Value::as_str)
         .ok_or_else(|| sqlx::Error::Protocol("article writer did not return body_markdown".into()))?;
     let proposed_slug = value.get("slug").and_then(Value::as_str).unwrap_or(title);
-    let slug = slugify(proposed_slug);
     let proposed_article_id = Uuid::new_v4();
+    let slug = format!("{}-{}", slugify(proposed_slug), &proposed_article_id.simple().to_string()[..8]);
     let mut tx = pool.begin().await?;
     let inserted = sqlx::query_scalar::<_, Uuid>(
         r#"insert into public.articles (id, story_id, title, slug, dek, body_markdown, status, metadata)
