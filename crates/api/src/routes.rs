@@ -16,7 +16,6 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sqlx::FromRow;
 use uuid::Uuid;
 
 async fn health() -> Json<Value> {
@@ -104,8 +103,8 @@ async fn create_agent_run(
         return Err(ApiError::Forbidden);
     }
 
-    // These two deterministic jobs validate the queue and persistence pipeline.
-    // Actual LLM-backed agent execution is introduced in Phase 4.
+    // Deterministic tasks verify the queue and persistence pipeline. LLM-backed
+    // agent execution is intentionally added in Phase 4.
     if !matches!(request.task_type.as_str(), "system.health_check" | "system.echo") {
         return Err(ApiError::Validation(
             "Phase 3 supports system.health_check and system.echo; agent execution arrives in Phase 4".into(),
@@ -120,7 +119,8 @@ async fn create_agent_run(
         task_type: request.task_type.clone(),
         input: request.input.clone(),
     };
-    let payload = serde_json::to_value(&job).map_err(ApiError::from)?;
+    let payload = serde_json::to_value(&job)
+        .map_err(|error| ApiError::Internal(error.into()))?;
 
     let mut tx = state.db.begin().await?;
     let run = sqlx::query_as::<_, AgentRun>(
@@ -212,7 +212,6 @@ pub fn router(state: AppState) -> Router {
 
 #[derive(Debug)]
 pub enum ApiError {
-    Unauthorized,
     Forbidden,
     NotFound,
     Validation(String),
@@ -231,7 +230,6 @@ impl From<anyhow::Error> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, code, message) = match self {
-            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", "Authentication required".to_owned()),
             Self::Forbidden => (StatusCode::FORBIDDEN, "forbidden", "Insufficient permissions".to_owned()),
             Self::NotFound => (StatusCode::NOT_FOUND, "not_found", "Resource not found".to_owned()),
             Self::Validation(message) => (StatusCode::BAD_REQUEST, "validation_error", message),
