@@ -7,7 +7,7 @@ on:
     branches: ["main"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   check:
@@ -21,3 +21,14 @@ jobs:
         run: cargo check --workspace --all-targets
       - name: Run workspace tests
         run: cargo test --workspace --all-targets
+
+      - name: Commit Cargo.lock for reproducible application builds
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if [ -f Cargo.lock ] && ! git ls-files --error-unmatch Cargo.lock >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Cargo.lock
+            git commit -m "build: lock Rust workspace dependencies"
+            git push origin HEAD:main
+          fi
