@@ -305,6 +305,25 @@ async fn upload_media(
     }))))
 }
 
+
+async fn signed_media_url(
+    State(state): State<AppState>,
+    Extension(identity): Extension<AuthenticatedUser>,
+    Path(asset_id): Path<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let user = app_user(&state, &identity).await?;
+    let asset = sqlx::query_as::<_, (String, Option<Uuid>)>(
+        "select storage_path,uploaded_by from public.media_assets where id=$1"
+    ).bind(asset_id).fetch_optional(&state.db).await.map_err(internal)?
+      .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error":"not_found"}))))?;
+    if !matches!(user.role.as_str(), "admin" | "editor" | "reviewer") && asset.1 != Some(user.id) {
+        return Err(forbidden());
+    }
+    let storage = atlas_agents::storage::S3Storage::from_env().await.map_err(internal)?;
+    let url = storage.signed_get_url(&asset.0).await.map_err(internal)?;
+    Ok(Json(json!({"asset_id":asset_id,"url":url,"expires_in_seconds":900})))
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/social-accounts", get(list_accounts).post(connect_account))
@@ -314,4 +333,5 @@ pub fn router() -> Router<AppState> {
         .route("/articles/{article_id}/revisions", post(create_revision))
         .route("/approvals/{approval_id}/decision", post(decide_approval))
         .route("/media", post(upload_media).layer(DefaultBodyLimit::max(15 * 1024 * 1024)))
+        .route("/media/{asset_id}/url", get(signed_media_url))
 }
