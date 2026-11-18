@@ -229,6 +229,11 @@ async fn create_social_post(
            select $1,a.id,$3,'draft',$4,$5
            from public.social_accounts a
            where a.id=$2 and a.is_active=true
+             and length($3) <= case
+                 when a.platform in ('x','twitter') then 280
+                 when a.platform='linkedin' then 3000
+                 when a.platform='instagram' then 2200
+                 else 0 end
              and (a.platform <> 'instagram' or $5::uuid is not null)
              and ($5::uuid is null or (a.platform='instagram' and exists (
                  select 1 from public.media_assets m
@@ -240,7 +245,7 @@ async fn create_social_post(
     ).bind(request.article_id).bind(request.social_account_id).bind(request.content)
      .bind(request.scheduled_at).bind(request.media_asset_id).bind(user.id).bind(user.role)
      .fetch_optional(&state.db).await.map_err(internal)?
-     .ok_or_else(|| bad_request("Choose an active account and attach a JPEG image uploaded by you (Instagram requires an image)."))?;
+     .ok_or_else(|| bad_request("Check that the account is active, the caption fits its platform limit, and any attached media is an image JPEG uploaded by you. Instagram requires a JPEG image."))?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -398,6 +403,19 @@ async fn create_revision(
     Ok((StatusCode::CREATED, Json(json!({"revision_id":revision_id,"article_id":article_id,"revision_number":revision_number,"status":"draft"}))))
 }
 
+
+fn media_signature_matches(content_type: &str, bytes: &[u8]) -> bool {
+    match content_type {
+        "image/jpeg" => bytes.starts_with(&[0xFF, 0xD8, 0xFF]),
+        "image/png" => bytes.starts_with(b"\\x89PNG\\r\\n\\x1a\\n"),
+        "image/webp" => bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "video/mp4" => bytes.len() >= 12 && &bytes[4..8] == b"ftyp",
+        "audio/mpeg" => bytes.starts_with(b"ID3") || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0),
+        "application/pdf" => bytes.starts_with(b"%PDF-"),
+        _ => false,
+    }
+}
+
 async fn upload_media(
     State(state): State<AppState>,
     Extension(identity): Extension<AuthenticatedUser>,
@@ -410,6 +428,9 @@ async fn upload_media(
     if !allowed.contains(&request.content_type.as_str()) { return Err(bad_request("Unsupported media content type.")); }
     let bytes = BASE64.decode(&request.base64_data).map_err(|_| bad_request("base64_data is invalid."))?;
     if bytes.len() > 10 * 1024 * 1024 { return Err(bad_request("Media upload exceeds the 10 MB limit.")); }
+    if !media_signature_matches(&request.content_type, &bytes) {
+        return Err(bad_request("The uploaded file content does not match its declared MIME type."));
+    }
     let extension = match request.content_type.as_str() {
         "image/jpeg" => "jpg", "image/png" => "png", "image/webp" => "webp",
         "video/mp4" => "mp4", "audio/mpeg" => "mp3", _ => "pdf",
@@ -464,4 +485,24 @@ pub fn router() -> Router<AppState> {
         .route("/approvals/{approval_id}/decision", post(decide_approval))
         .route("/media", post(upload_media).layer(DefaultBodyLimit::max(15 * 1024 * 1024)))
         .route("/media/{asset_id}/url", get(signed_media_url))
+}
+
+#[cfg(test)]
+mod media_validation_tests {
+    use super::media_signature_matches;
+
+    #[test]
+    fn accepts_jpeg_magic_bytes() {
+        assert!(media_signature_matches("image/jpeg", &[0xFF, 0xD8, 0xFF, 0xE0]));
+    }
+
+    #[test]
+    fn rejects_spoofed_jpeg_content_type() {
+        assert!(!media_signature_matches("image/jpeg", b"<html>not an image</html>"));
+    }
+
+    #[test]
+    fn accepts_png_signature() {
+        assert!(media_signature_matches("image/png", b"\\x89PNG\\r\\n\\x1a\\nrest"));
+    }
 }
