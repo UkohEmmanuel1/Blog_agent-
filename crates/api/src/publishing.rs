@@ -177,6 +177,9 @@ async fn connect_account(
     if request.access_token.trim().is_empty() || request.account_name.trim().is_empty() {
         return Err(bad_request("account_name and access_token are required."));
     }
+    if platform == "instagram" && request.platform_account_id.as_deref().unwrap_or("").trim().is_empty() {
+        return Err(bad_request("Instagram requires the Instagram professional account ID in platform_account_id."));
+    }
     let key = std::env::var("SOCIAL_TOKEN_ENCRYPTION_KEY")
         .map_err(|_| bad_request("SOCIAL_TOKEN_ENCRYPTION_KEY is not configured on the API server."))?;
     let row = sqlx::query_as::<_, SocialAccountView>(
