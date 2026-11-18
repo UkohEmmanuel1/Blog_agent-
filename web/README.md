@@ -10,7 +10,7 @@ Next.js App Router frontend for the ATLAS editorial platform.
 5. Run npm install and npm run dev from this directory. Open http://localhost:3000.
 
 ## Production
-Run npm ci, npm run typecheck and npm run build. Deploy this directory as a Next.js application.
+Run npm install, npm run typecheck and npm run build. Deploy this directory as a Next.js application.
 
 Only the Supabase anon/publishable key belongs in NEXT_PUBLIC variables. Never expose service-role keys, database credentials, Redis URLs, S3 secrets, LLM API keys or social access tokens to the browser.
 
