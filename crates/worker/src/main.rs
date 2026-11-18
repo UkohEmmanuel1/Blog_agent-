@@ -88,7 +88,7 @@ async fn dispatch_outbox(pool: PgPool, mut storage: RedisStorage<AgentRunJob>) {
                         Err(error) => {
                             tracing::error!(%outbox_id, %error, "invalid outbox payload; moving it out of the dispatch loop");
                             let _ = sqlx::query(
-                                "update public.job_outbox set status='published', last_error=$2, locked_at=null, updated_at=now() where id=$1",
+                                "update public.job_outbox set status='failed', last_error=$2, locked_at=null, updated_at=now() where id=$1",
                             )
                             .bind(outbox_id)
                             .bind(format!("invalid payload: {error}"))
@@ -140,25 +140,28 @@ async fn dispatch_outbox(pool: PgPool, mut storage: RedisStorage<AgentRunJob>) {
 async fn process_agent_run(job: AgentRunJob, pool: PgPool) -> JobResult {
     let claimed = sqlx::query_scalar::<_, Uuid>(
         r#"update public.agent_runs
-           set status='running', started_at=coalesce(started_at, now()), error_message=null
-           where id=$1 and status='queued'
+           set status='running', started_at=now(), error_message=null
+           where id=$1
+             and (status='queued' or (status='running' and started_at < now() - interval '10 minutes'))
            returning id"#,
     )
     .bind(job.agent_run_id)
     .fetch_optional(&pool)
     .await?;
 
+    // Duplicate Redis deliveries are harmless; stale running jobs can be reclaimed
+    // after a worker crash or machine termination.
     if claimed.is_none() {
         tracing::info!(run_id=%job.agent_run_id, "duplicate or already-processed job ignored");
         return Ok(());
     }
 
-    let output = match job.task_type.as_str() {
-        "system.health_check" => {
-            sqlx::query("select 1").execute(&pool).await?;
-            json!({"ok":true,"database":"reachable"})
-        }
-        "system.echo" => json!({"echo":job.input}),
+    let task_result: Result<Value, sqlx::Error> = match job.task_type.as_str() {
+        "system.health_check" => match sqlx::query("select 1").execute(&pool).await {
+            Ok(_) => Ok(json!({"ok":true,"database":"reachable"})),
+            Err(error) => Err(error),
+        },
+        "system.echo" => Ok(json!({"echo":job.input})),
         other => {
             let message = format!("Unsupported Phase 3 task type: {other}");
             sqlx::query(
@@ -173,13 +176,32 @@ async fn process_agent_run(job: AgentRunJob, pool: PgPool) -> JobResult {
         }
     };
 
-    sqlx::query(
-        "update public.agent_runs set status='succeeded', output=$2, finished_at=now(), error_message=null where id=$1",
-    )
-    .bind(job.agent_run_id)
-    .bind(output)
-    .execute(&pool)
-    .await?;
-    tracing::info!(run_id=%job.agent_run_id, "agent-run pipeline task completed");
-    Ok(())
+    match task_result {
+        Ok(output) => {
+            sqlx::query(
+                "update public.agent_runs set status='succeeded', output=$2, finished_at=now(), error_message=null where id=$1",
+            )
+            .bind(job.agent_run_id)
+            .bind(output)
+            .execute(&pool)
+            .await?;
+            tracing::info!(run_id=%job.agent_run_id, "agent-run pipeline task completed");
+            Ok(())
+        }
+        Err(error) => {
+            // Restore queued state so Apalis can retry the task. The job handler is
+            // idempotent and will reclaim a run if a worker dies mid-execution.
+            if let Err(reset_error) = sqlx::query(
+                "update public.agent_runs set status='queued', error_message=$2 where id=$1",
+            )
+            .bind(job.agent_run_id)
+            .bind(error.to_string())
+            .execute(&pool)
+            .await
+            {
+                tracing::error!(run_id=%job.agent_run_id, %reset_error, "could not restore run state before retry");
+            }
+            Err(Box::new(error))
+        }
+    }
 }
