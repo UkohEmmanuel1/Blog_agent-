@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+/target
+/.sqlx
+.DS_Store
+.vscode/
+.idea/
