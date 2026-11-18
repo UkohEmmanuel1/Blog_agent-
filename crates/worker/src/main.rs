@@ -252,7 +252,7 @@ async fn run_research_agent(job: &AgentRunJob, pool: &PgPool) -> Result<Value, s
         for claim in claims.iter().take(30) {
             let Some(text) = claim.get("claim_text").and_then(Value::as_str) else { continue; };
             let evidence = claim.get("evidence_needed").cloned().unwrap_or_else(|| json!([]));
-            sqlx::query("insert into public.story_claims (story_id, claim_text, verification_status, evidence) values ($1,$2,'unverified',$3)")
+            sqlx::query("insert into public.story_claims (story_id, claim_text, verification_status, evidence) select $1,$2,'unverified',$3 where not exists (select 1 from public.story_claims where story_id=$1 and claim_text=$2)")
                 .bind(story_id).bind(text).bind(evidence).execute(pool).await?;
         }
     }
