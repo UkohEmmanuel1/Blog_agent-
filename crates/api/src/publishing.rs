@@ -53,7 +53,13 @@ struct DecisionRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct PageQuery {\n    limit: Option<i64>,\n    status: Option<String>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct UploadMediaRequest {
+struct PageQuery {
+    limit: Option<i64>,
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UploadMediaRequest {
     filename: String,
     content_type: String,
     base64_data: String,
@@ -381,11 +387,12 @@ async fn signed_media_url(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/social-accounts", get(list_accounts).post(connect_account))\n        .route("/social-posts", get(list_social_posts).post(create_social_post))\n        .route("/approvals", get(list_approvals))\n        .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
-        .route("/social-posts", post(create_social_post))
+        .route("/social-accounts", get(list_accounts).post(connect_account))
+        .route("/social-posts", get(list_social_posts).post(create_social_post))
+        .route("/approvals", get(list_approvals))
+        .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
         .route("/social-posts/{post_id}/submit-for-review", post(submit_social_post))
         .route("/articles/{article_id}/submit-for-review", post(submit_article))
-        .route("/articles/{article_id}/revisions", post(create_revision))
         .route("/approvals/{approval_id}/decision", post(decide_approval))
         .route("/media", post(upload_media).layer(DefaultBodyLimit::max(15 * 1024 * 1024)))
         .route("/media/{asset_id}/url", get(signed_media_url))
