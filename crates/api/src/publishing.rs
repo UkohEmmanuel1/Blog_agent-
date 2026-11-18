@@ -255,6 +255,9 @@ async fn create_revision(
         return Err(bad_request("title and body_markdown are required."));
     }
     let mut tx = state.db.begin().await.map_err(internal)?;
+    let locked = sqlx::query("select id from public.articles where id=$1 and status not in ('published','archived') for update")
+        .bind(article_id).fetch_optional(&mut *tx).await.map_err(internal)?;
+    if locked.is_none() { return Err(bad_request("Article not found or locked after publication.")); }
     let revision_number: i32 = sqlx::query_scalar(
         "select coalesce(max(revision_number),0)+1 from public.article_revisions where article_id=$1"
     ).bind(article_id).fetch_one(&mut *tx).await.map_err(internal)?;
