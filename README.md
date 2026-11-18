@@ -35,7 +35,7 @@ Use the Supabase Transaction Pooler (commonly port 6543) for pooled application 
 
 ### Supabase Storage
 
-Create the `atlas-media` bucket in Supabase Storage and enable the S3 protocol under Storage configuration. Generate an S3 access-key/secret-key pair from the Supabase dashboard; do not use the Supabase service-role key as S3 credentials. Copy the exact project S3 endpoint and region from the dashboard. ATLAS stores uploaded objects in the private bucket and returns 15-minute signed download URLs.
+Create the `atlas-media` bucket in Supabase Storage and enable the S3 protocol under Storage configuration. Generate an S3 access-key/secret-key pair from the Supabase dashboard. These credentials grant broad server-side Storage access and bypass Storage RLS, so keep them exclusively in the API server environment; never send them to the frontend or commit them. Copy the exact project S3 endpoint and region from the dashboard. ATLAS stores uploaded objects in the private bucket and returns 15-minute signed download URLs.
 
 ### Social token encryption
 
