@@ -2,6 +2,10 @@
 
 ATLAS is a Rust multi-agent content research, writing, review, media, and social publishing platform.
 
+## Web frontend
+
+A Next.js 15 + TypeScript App Router frontend lives in `web/`. See [web/README.md](web/README.md) for local setup, Supabase Auth configuration, and deployment instructions. It provides the ATLAS workspace dashboard for research, articles, AI runs, approvals, social drafts, and connected publishing accounts.
+
 ## Workspace
 
 - `crates/core` — shared domain models, errors, and serializable queue payloads
