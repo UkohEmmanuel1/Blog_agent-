@@ -1,7 +1,7 @@
 use crate::{auth::AuthenticatedUser, state::AppState};
 use atlas_core::models::SocialPost;
 use axum::{
-    extract::{Extension, Path, Query, State},
+    extract::{DefaultBodyLimit, Extension, Path, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -313,5 +313,5 @@ pub fn router() -> Router<AppState> {
         .route("/articles/{article_id}/submit-for-review", post(submit_article))
         .route("/articles/{article_id}/revisions", post(create_revision))
         .route("/approvals/{approval_id}/decision", post(decide_approval))
-        .route("/media", post(upload_media))
+        .route("/media", post(upload_media).layer(DefaultBodyLimit::max(15 * 1024 * 1024)))
 }
