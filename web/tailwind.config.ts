@@ -1,0 +1,1 @@
+import type { Config } from "tailwindcss"; const config: Config = { content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"], theme: { extend: { colors: { canvas:"#080b12", panel:"#101622", line:"#202a3a", muted:"#8b97aa", accent:"#a3e635" } } }, plugins: [] }; export default config;
