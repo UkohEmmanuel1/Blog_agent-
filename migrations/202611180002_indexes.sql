@@ -1,0 +1,14 @@
+create index if not exists idx_stories_status_published on public.stories(status, published_at desc);
+create index if not exists idx_stories_source on public.stories(source_id);
+create index if not exists idx_story_claims_story on public.story_claims(story_id);
+create index if not exists idx_articles_status_updated on public.articles(status, updated_at desc);
+create index if not exists idx_articles_story on public.articles(story_id);
+create index if not exists idx_article_revisions_article on public.article_revisions(article_id, revision_number desc);
+create index if not exists idx_media_assets_article on public.media_assets(article_id);
+create index if not exists idx_social_posts_status_schedule on public.social_posts(status, scheduled_at);
+create index if not exists idx_social_posts_account on public.social_posts(social_account_id);
+create index if not exists idx_approvals_status_created on public.approvals(status, created_at);
+create index if not exists idx_agent_runs_status_created on public.agent_runs(status, created_at);
+create index if not exists idx_agent_runs_agent on public.agent_runs(agent_id);
+create index if not exists idx_audit_logs_resource on public.audit_logs(resource_type, resource_id, created_at desc);
+create index if not exists idx_audit_logs_actor on public.audit_logs(actor_id, created_at desc);
