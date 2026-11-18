@@ -1,5 +1,5 @@
 use crate::{auth::AuthenticatedUser, state::AppState};
-use atlas_core::models::SocialPost;
+use atlas_core::models::{Approval, ArticleRevision, SocialPost};
 use axum::{
     extract::{DefaultBodyLimit, Extension, Path, State},
     http::StatusCode,
@@ -53,7 +53,7 @@ struct DecisionRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct UploadMediaRequest {
+struct PageQuery {\n    limit: Option<i64>,\n    status: Option<String>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct UploadMediaRequest {
     filename: String,
     content_type: String,
     base64_data: String,
@@ -79,6 +79,58 @@ fn forbidden() -> (StatusCode, Json<Value>) {
 
 fn bad_request(message: &str) -> (StatusCode, Json<Value>) {
     (StatusCode::BAD_REQUEST, Json(json!({"error":"validation_error","message":message})))
+}
+
+
+async fn list_approvals(
+    State(state): State<AppState>,
+    Extension(identity): Extension<AuthenticatedUser>,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<Vec<Approval>>, (StatusCode, Json<Value>)> {
+    let user = app_user(&state, &identity).await?;
+    if !matches!(user.role.as_str(), "admin" | "reviewer") { return Err(forbidden()); }
+    if let Some(status) = query.status.as_deref() {
+        if !matches!(status, "pending" | "approved" | "rejected" | "changes_requested" | "cancelled") {
+            return Err(bad_request("Invalid approval status filter."));
+        }
+    }
+    let limit = query.limit.unwrap_or(25).clamp(1, 100);
+    let rows = sqlx::query_as::<_, Approval>(
+        "select * from public.approvals where ($1::text is null or status=$1) order by created_at desc limit $2"
+    ).bind(query.status).bind(limit).fetch_all(&state.db).await.map_err(internal)?;
+    Ok(Json(rows))
+}
+
+async fn list_social_posts(
+    State(state): State<AppState>,
+    Extension(identity): Extension<AuthenticatedUser>,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<Vec<SocialPost>>, (StatusCode, Json<Value>)> {
+    app_user(&state, &identity).await?;
+    if let Some(status) = query.status.as_deref() {
+        if !matches!(status, "draft" | "pending_approval" | "scheduled" | "publishing" | "published" | "failed" | "cancelled") {
+            return Err(bad_request("Invalid social post status filter."));
+        }
+    }
+    let limit = query.limit.unwrap_or(25).clamp(1, 100);
+    let rows = sqlx::query_as::<_, SocialPost>(
+        r#"select * from public.social_posts
+           where ($1::text is null or status=$1)
+           order by created_at desc limit $2"#
+    ).bind(query.status).bind(limit).fetch_all(&state.db).await.map_err(internal)?;
+    Ok(Json(rows))
+}
+
+async fn list_article_revisions(
+    State(state): State<AppState>,
+    Extension(identity): Extension<AuthenticatedUser>,
+    Path(article_id): Path<Uuid>,
+) -> Result<Json<Vec<ArticleRevision>>, (StatusCode, Json<Value>)> {
+    app_user(&state, &identity).await?;
+    let rows = sqlx::query_as::<_, ArticleRevision>(
+        "select * from public.article_revisions where article_id=$1 order by revision_number desc"
+    ).bind(article_id).fetch_all(&state.db).await.map_err(internal)?;
+    Ok(Json(rows))
 }
 
 async fn list_accounts(
@@ -329,7 +381,7 @@ async fn signed_media_url(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/social-accounts", get(list_accounts).post(connect_account))
+        .route("/social-accounts", get(list_accounts).post(connect_account))\n        .route("/social-posts", get(list_social_posts).post(create_social_post))\n        .route("/approvals", get(list_approvals))\n        .route("/articles/{article_id}/revisions", get(list_article_revisions).post(create_revision))
         .route("/social-posts", post(create_social_post))
         .route("/social-posts/{post_id}/submit-for-review", post(submit_social_post))
         .route("/articles/{article_id}/submit-for-review", post(submit_article))
