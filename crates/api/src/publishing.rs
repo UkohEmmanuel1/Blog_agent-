@@ -503,6 +503,6 @@ mod media_validation_tests {
 
     #[test]
     fn accepts_png_signature() {
-        assert!(media_signature_matches("image/png", b"\\x89PNG\\r\\n\\x1a\\nrest"));
+        assert!(media_signature_matches("image/png", b"\x89PNG\r\n\x1a\nrest"));
     }
 }
