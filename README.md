@@ -29,6 +29,7 @@ Copy `.env.example` to `.env` and set:
 
 - `DATABASE_URL`, `SUPABASE_URL`, `REDIS_URL`
 - `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY`
+- `TAVILY_API_KEY` for live web search in research jobs
 - `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`
 - `SOCIAL_TOKEN_ENCRYPTION_KEY`, `INSTAGRAM_GRAPH_API_BASE_URL`, and `INSTAGRAM_GRAPH_API_VERSION` when publishing to Instagram
 - `CORS_ALLOWED_ORIGIN` to your frontend's exact origin
@@ -106,7 +107,7 @@ Content-Type: application/json
 }
 ```
 
-The research agent updates the story summary and saves extracted claims as `unverified` in `story_claims`. AI-generated claims are not automatically fact-checked or promoted to verified.
+The research agent uses the configured LLM to generate three search angles, queries Tavily in parallel, deduplicates up to 15 sources, and synthesizes source-linked findings, contradictions, limitations, an outline, and an editorial draft. Findings are stored in `story_claims` with source IDs, source URLs, confidence, and rationale in the evidence JSON. Status is only promoted to `supported` when the synthesis explicitly labels it supported; the system does not treat LLM judgement as independent verification. Quality metrics and retry recommendations are returned in the agent run output. `TAVILY_API_KEY` is required for `content.research`.
 
 ### Draft an article
 
