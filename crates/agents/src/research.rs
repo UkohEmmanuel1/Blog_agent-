@@ -68,10 +68,18 @@ pub async fn run(topic: &str, context: &str, provider: &str, model: &str) -> Res
     if queries.is_empty() { queries = vec![topic.to_owned(), format!("{topic} background and key facts"), format!("{topic} recent developments analysis")]; }
     let mut search_results = Vec::new();
     let mut search_errors = Vec::new();
+    let mut tasks = tokio::task::JoinSet::new();
     for query in queries.iter().take(3) {
-        match search(&client, &key, query).await {
-            Ok(results) => search_results.extend(results),
-            Err(error) => search_errors.push(format!("{query}: {error}")),
+        let client = client.clone();
+        let key = key.clone();
+        let query = query.clone();
+        tasks.spawn(async move { (query.clone(), search(&client, &key, &query).await) });
+    }
+    while let Some(result) = tasks.join_next().await {
+        match result {
+            Ok((query, Ok(sources))) => search_results.extend(sources),
+            Ok((query, Err(error))) => search_errors.push(format!("{query}: {error}")),
+            Err(error) => search_errors.push(format!("search task join failed: {error}")),
         }
     }
     // Deduplicate by canonical URL and retain the strongest-ranked result.
