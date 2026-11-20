@@ -99,9 +99,9 @@ pub async fn run(topic: &str, context: &str, provider: &str, model: &str) -> Res
     if let Some(findings) = report.get_mut("findings").and_then(Value::as_array_mut) {
         for finding in findings {
             let valid_ids = finding.get("source_ids").and_then(Value::as_array).cloned().unwrap_or_default()
-                .into_iter().filter_map(Value::as_str)
-                .filter(|id| source_ids.contains(*id))
-                .map(str::to_owned).collect::<Vec<_>>();
+                .into_iter().filter_map(|value| value.as_str().map(str::to_owned))
+                .filter(|id| source_ids.contains(id))
+                .collect::<Vec<_>>();
             let has_valid_sources = !valid_ids.is_empty();
             finding["source_ids"] = json!(valid_ids);
             if !has_valid_sources { finding["verification_status"] = json!("unverified"); }
