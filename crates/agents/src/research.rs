@@ -102,8 +102,9 @@ pub async fn run(topic: &str, context: &str, provider: &str, model: &str) -> Res
                 .into_iter().filter_map(Value::as_str)
                 .filter(|id| source_ids.contains(*id))
                 .map(str::to_owned).collect::<Vec<_>>();
+            let has_valid_sources = !valid_ids.is_empty();
             finding["source_ids"] = json!(valid_ids);
-            if valid_ids.is_empty() { finding["verification_status"] = json!("unverified"); }
+            if !has_valid_sources { finding["verification_status"] = json!("unverified"); }
         }
     }
     let findings = report.get("findings").and_then(Value::as_array).cloned().unwrap_or_default();
